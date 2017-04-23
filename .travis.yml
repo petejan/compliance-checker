@@ -1,17 +1,57 @@
 language: python
 
-env:
-    - CONDA="python=2.7"
+sudo: false
+
+matrix:
+  fast_finish: true
+  include:
+  - python: 2.7
+    env: TEST_TARGET=default
+  - python: 2.7
+    env: TEST_TARGET=integration
+  - python: 3.4
+    env: TEST_TARGET=default
+  - python: 3.5
+    env: TEST_TARGET=default
+  - python: 3.6
+    env: TEST_TARGET=default
+  - python: 3.6
+    env: TEST_TARGET=coding_standards
+  - python: 3.6
+    env: TEST_TARGET=integration
+  allow_failures:
+  - python: 3.6
+    env: TEST_TARGET=coding_standards
+  - python: 2.7
+    env: TEST_TARGET=integration
+  - python: 3.6
+    env: TEST_TARGET=integration
 
 before_install:
-    - URL=http://repo.continuum.io/miniconda/Miniconda-latest-Linux-x86_64.sh
-    - wget $URL -O miniconda.sh
-    - bash miniconda.sh -b -p $HOME/miniconda
-    - export PATH="$HOME/miniconda/bin:$PATH"
-    - conda update --yes conda
-    - conda config --add channels ioos --force
-    - travis_retry conda create --yes -n test --file requirements.txt $CONDA
-    - source activate test
+  - wget http://bit.ly/miniconda -O miniconda.sh
+  - bash miniconda.sh -b -p $HOME/miniconda
+  - export PATH="$HOME/miniconda/bin:$PATH"
+  - conda update conda --yes
+  - conda config --add channels conda-forge --force
+  - conda create --yes -n TEST python=$TRAVIS_PYTHON_VERSION --file requirements.txt --file test_requirements.txt
+  - source activate TEST
+  - if [[ "$TRAVIS_PYTHON_VERSION" == "2.7" ]]; then
+      conda install --yes httpretty ;
+    fi
+
+# Test source distribution.
+install:
+    - python setup.py sdist && version=$(python setup.py --version) && pushd dist  && pip install compliance-checker-${version}.tar.gz && popd
 
 script:
-    - python setup.py test
+  - if [[ $TEST_TARGET == "default" ]]; then
+      py.test -k "not integration" -s -rxs -v ;
+    fi
+
+  - if [[ $TEST_TARGET == "coding_standards" ]]; then
+      flake8 --ignore=E501,E251,E221,E201,E202,E203 -qq --statistics . ;
+    fi
+
+  - if [[ $TEST_TARGET == "integration" ]]; then
+      py.test -m "integration" -s -rxs -v ;
+    fi
